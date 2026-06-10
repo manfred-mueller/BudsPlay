@@ -43,4 +43,10 @@
     <string name="eq_relax">Relax</string>
     <string name="settings_title">Settings</string>
     <string name="settings_eq_label">Equalizer</string>
-    <strin
+    <string name="settings_ok">OK</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="btn_add_track">+ Add audio file</string>
+    <string name="btn_remove">✕</string>
+    <string name="track_active_indicator">▶ </string>
+    <string name="back_press_hint">Press back again to exit</string>
+</resources>

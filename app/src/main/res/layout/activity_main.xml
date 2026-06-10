@@ -265,4 +265,13 @@
                 android:id="@+id/tvDuration"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                androi
+                android:layout_weight="1"
+                android:gravity="end"
+                android:text=""
+                android:textColor="#aaccff"
+                android:textSize="11sp" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+</RelativeLayout>

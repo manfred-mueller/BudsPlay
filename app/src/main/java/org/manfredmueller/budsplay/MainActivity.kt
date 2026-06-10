@@ -401,4 +401,59 @@ class MainActivity : AppCompatActivity() {
             } ?: uri.lastPathSegment ?: "?"
         } catch (e: Exception) { uri.lastPathSegment ?: "?" }
         return name.removeSuffix(".mp3").removeSuffix(".MP3")
-     
+            .removeSuffix(".wav").removeSuffix(".WAV")
+            .removeSuffix(".ogg").removeSuffix(".OGG")
+            .removeSuffix(".flac").removeSuffix(".FLAC")
+            .removeSuffix(".aac").removeSuffix(".AAC")
+            .removeSuffix(".m4a").removeSuffix(".M4A")
+    }
+
+    // -------------------------------------------------------------------------
+    // Statusleiste
+    // -------------------------------------------------------------------------
+
+    private fun startUpdating() { handler.post(updateRunnable) }
+    private fun stopUpdating()  { handler.removeCallbacks(updateRunnable) }
+
+    private fun updateStatusBar() {
+        val service = playerService ?: return
+        val duration = service.getDuration()
+        val position = service.getPosition()
+        if (duration <= 0) return
+        binding.seekBar.max = duration
+        binding.seekBar.progress = position
+        binding.tvPosition.text  = formatTime(position)
+        binding.tvDuration.text  = formatTime(duration)
+        binding.tvRemaining.text = formatTime(duration - position)
+    }
+
+    private fun formatTime(ms: Int): String {
+        val s = ms / 1000; return "%d:%02d".format(s / 60, s % 60)
+    }
+
+    // -------------------------------------------------------------------------
+    // Pulsier-Animation
+    // -------------------------------------------------------------------------
+
+    private fun startPulse() {
+        stopPulse()
+        val anim = { prop: String ->
+            ObjectAnimator.ofFloat(binding.imgLogo, prop, 1.0f, 1.08f).apply {
+                duration = 1200
+                repeatCount = ObjectAnimator.INFINITE
+                repeatMode = ObjectAnimator.REVERSE
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
+        }
+        pulseAnimatorX = anim("scaleX")
+        pulseAnimatorY = anim("scaleY")
+    }
+
+    private fun stopPulse() {
+        pulseAnimatorX?.cancel(); pulseAnimatorX = null
+        pulseAnimatorY?.cancel(); pulseAnimatorY = null
+        binding.imgLogo.scaleX = 1.0f
+        binding.imgLogo.scaleY = 1.0f
+    }
+}

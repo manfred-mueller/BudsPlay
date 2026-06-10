@@ -384,4 +384,15 @@ class PlayerService : Service() {
                 if (isPlaying()) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                 getString(R.string.notification_play_pause),
                 MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE))
-            .addA
+            .addAction(android.R.drawable.ic_media_next,
+                getString(R.string.notification_track_next),
+                MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
+            .setStyle(
+                androidx.media.app.NotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSession.sessionToken)
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+    }
+}
