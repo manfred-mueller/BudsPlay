@@ -1,0 +1,27 @@
+BudsPlay ermöglicht es, zwei Audio-Dateien direkt über die 
+Tipp-Gesten deiner Bluetooth-Ohrhörer zu steuern – ganz ohne 
+das Handy in die Hand zu nehmen.
+
+Einfach zwei Audio-Dateien auswählen, und los:
+
+- Doppeltippen rechts → Track 1 abspielen
+- Dreifachtippen rechts → Track 2 abspielen
+
+Die gewählten Dateien werden dauerhaft gespeichert und stehen 
+beim nächsten Start sofort bereit.
+
+FUNKTIONEN
+- Unterstützt MP3, WAV, FLAC, OGG, AAC, M4A und weitere Formate
+- Zeitanzeige mit Fortschrittsbalken und verbleibender Spielzeit
+- Manuelles Vor- und Zurückspulen per Fortschrittsbalken
+- Kompatibel mit allen Bluetooth-Ohrhörern die AVRCP unterstützen
+- Läuft im Hintergrund weiter – Steuerung auch bei gesperrtem Bildschirm
+- Keine Werbung, keine In-App-Käufe, keine Datensammlung
+
+DATENSCHUTZ
+BudsPlay speichert ausschließlich die Dateipfade der gewählten
+Audio-Dateien lokal auf deinem Gerät. Es werden keinerlei
+personenbezogene Daten erhoben oder weitergegeben.
+
+Vom Entwickler von ThetaVoice:
+https://play.google.com/store/apps/details?id=org.manfredmueller.thetavoice

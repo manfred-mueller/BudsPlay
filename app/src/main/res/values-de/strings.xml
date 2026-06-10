@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BudsPlay</string>
+
+    <!-- Track labels -->
+    <string name="track1_hint">Track 1  (Doppeltippen rechts)</string>
+    <string name="track2_hint">Track 2  (Dreifachtippen rechts)</string>
+    <string name="track1_select">Audio-Datei 1 auswählen …</string>
+    <string name="track2_select">Audio-Datei 2 auswählen …</string>
+    <string name="track1_label">Track 1: %1$s</string>
+    <string name="track2_label">Track 2: %1$s</string>
+
+    <!-- Playback -->
+    <string name="btn_play">&#9654;  Abspielen</string>
+    <string name="btn_pause">&#9208;  Pause</string>
+    <string name="btn_play_short">&#9654;</string>
+    <string name="now_playing_none"></string>
+    <string name="track_index">Track %1$d</string>
+
+    <!-- Info dialog -->
+    <string name="info_title">BudsPlay</string>
+    <string name="info_message">Version %1$s\n\nSteuere zwei Audio-Dateien über Bluetooth-Ohrhörer:\n\n• Doppeltippen rechts → Track 1\n• Dreifachtippen rechts → Track 2\n\nDie gewählten Dateien werden dauerhaft gespeichert.\n\nDiese App speichert keine personenbezogenen Daten.</string>
+    <string name="info_ok">OK</string>
+    <string name="dev_credit">Vom Entwickler von ThetaVoice</string>
+
+    <!-- Permissions -->
+    <string name="permission_denied">Berechtigung verweigert</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Wiedergabe</string>
+    <string name="notification_channel_desc">Zeigt die aktuelle Wiedergabe</string>
+    <!-- Prev-Button löst SKIP_TO_PREVIOUS aus → Slot 1 (Track 2), Next → Slot 0 (Track 1) -->
+    <string name="notification_track_prev">Track 2</string>
+    <string name="notification_play_pause">Play/Pause</string>
+    <string name="notification_track_next">Track 1</string>
+    <string name="volume_label">Lautstärke</string>
+    <string name="eq_flat">Aus</string>
+    <string name="eq_bass_boost">Bass Boost</string>
+    <string name="eq_vocal">Stimme</string>
+    <string name="eq_relax">Entspannung</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_eq_label">Equalizer</string>
+    <string name="settings_ok">OK</string>
+    <string name="settings_cancel">Abbrechen</string>
+    <string name="btn_add_track">+ Audio-Datei hinzufügen</string>
+    <string name="btn_remove">✕</string>
+    <string name="track_active_indicator">▶ </string>
+    <string name="back_press_hint">Erneut drücken zum Beenden</string>
+</resour

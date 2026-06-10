@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BudsPlay</string>
+
+    <!-- Track labels -->
+    <string name="track1_hint">Track 1  (double tap right)</string>
+    <string name="track2_hint">Track 2  (triple tap right)</string>
+    <string name="track1_select">Select audio file 1 …</string>
+    <string name="track2_select">Select audio file 2 …</string>
+    <string name="track1_label">Track 1: %1$s</string>
+    <string name="track2_label">Track 2: %1$s</string>
+
+    <!-- Playback -->
+    <string name="btn_play">&#9654;  Play</string>
+    <string name="btn_pause">&#9208;  Pause</string>
+    <string name="btn_play_short">&#9654;</string>
+    <string name="now_playing_none"></string>
+    <string name="track_index">Track %1$d</string>
+
+    <!-- Info dialog -->
+    <string name="info_title">BudsPlay</string>
+    <string name="info_message">Version %1$s\n\nControl two audio files via Bluetooth earbuds:\n\n• Double tap right → Track 1\n• Triple tap right → Track 2\n\nSelected files are saved permanently.\n\nThis app does not collect any personal data.</string>
+    <string name="info_ok">OK</string>
+    <string name="dev_credit">From the developer of ThetaVoice</string>
+    <string name="dev_credit_button" translatable="false">ThetaVoice</string>
+    <!-- TODO: Paket-ID anpassen, sobald die finale Play-Store-URL von ThetaVoice feststeht -->
+    <string name="thetavoice_url" translatable="false">https://play.google.com/store/apps/details?id=org.manfredmueller.thetavoice</string>
+
+    <!-- Permissions -->
+    <string name="permission_denied">Permission denied</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Playback</string>
+    <string name="notification_channel_desc">Shows current playback</string>
+    <!-- Prev button triggers SKIP_TO_PREVIOUS → slot 1 (Track 2), next triggers slot 0 (Track 1) -->
+    <string name="notification_track_prev">Track 2</string>
+    <string name="notification_play_pause">Play/Pause</string>
+    <string name="notification_track_next">Track 1</string>
+    <string name="volume_label">Volume</string>
+    <string name="eq_flat">Off</string>
+    <string name="eq_bass_boost">Bass Boost</string>
+    <string name="eq_vocal">Vocal</string>
+    <string name="eq_relax">Relax</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_eq_label">Equalizer</string>
+    <strin

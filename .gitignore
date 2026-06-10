@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Lokale Konfiguration (SDK-Pfad etc.)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+
+# Signierte Builds & Keystores
+app/release/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Sonstiges
+.DS_Store

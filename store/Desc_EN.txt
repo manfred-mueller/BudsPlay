@@ -1,0 +1,27 @@
+BudsPlay lets you control two audio files directly via the tap 
+gestures of your Bluetooth earbuds – without ever touching 
+your phone.
+
+Simply select two audio files and you're ready to go:
+
+- Double tap right → play Track 1
+- Triple tap right → play Track 2
+
+Your selected files are saved permanently and are ready 
+instantly on next launch.
+
+FEATURES
+- Supports MP3, WAV, FLAC, OGG, AAC, M4A and more
+- Progress bar with elapsed and remaining time display
+- Manual scrubbing via the progress bar
+- Compatible with all Bluetooth earbuds supporting AVRCP
+- Runs in the background – control works on locked screen too
+- No ads, no in-app purchases, no data collection
+
+PRIVACY
+BudsPlay only stores the file paths of your selected audio
+files locally on your device. No personal data is collected
+or shared.
+
+From the developer of ThetaVoice:
+https://play.google.com/store/apps/details?id=org.manfredmueller.thetavoice
