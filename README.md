@@ -1,12 +1,13 @@
 # BudsPlay
 
-Control two audio tracks directly via the tap gestures of your Bluetooth earbuds — without ever touching your phone.
+Control three audio tracks directly via the tap gestures of your Bluetooth earbuds — without ever touching your phone.
+Optionally keep your buds awake.
 
-*Steuere zwei Audio-Tracks direkt über die Tipp-Gesten deiner Bluetooth-Ohrhörer — ganz ohne das Handy in die Hand zu nehmen.*
+*Steuere drei Audio-Tracks direkt über die Tipp-Gesten deiner Bluetooth-Ohrhörer — ganz ohne das Handy in die Hand zu nehmen. Halte deine Bluetooth-Ohrhörer optional verbunden.*
 
 ## How it works / Funktionsweise
 
-Select two audio files (one per slot), then control playback from your earbuds:
+Select three audio files (one per slot), then control playback from your earbuds:
 
 - **Double tap right** (next track) → play Track 1
 - **Triple tap right** (previous track) → play Track 2
@@ -18,6 +19,7 @@ Works with any Bluetooth earbuds that send AVRCP media button events.
 - Multiple audio files per slot, selectable via dropdown
 - Supports MP3, WAV, FLAC, OGG, AAC, M4A and more
 - Volume slider with persistent setting
+- "Keep Buds on": inaudible 16.2 kHz tone (5 s every 60 s, only while idle) prevents earbuds from auto-powering off
 - Equalizer presets (Bass Boost, Vocal, Relax, Off)
 - Progress bar with elapsed/remaining time and manual scrubbing
 - Foreground service: playback and controls keep working with the screen locked

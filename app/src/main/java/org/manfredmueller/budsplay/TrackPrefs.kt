@@ -2,55 +2,62 @@ package org.manfredmueller.budsplay
 
 import android.content.Context
 import android.net.Uri
-import org.json.JSONArray
 
 /**
- * Speichert pro Slot eine Liste von URIs und den Index des aktiven Tracks.
- * Slot 0 = Doppeltippen rechts, Slot 1 = Dreifachtippen rechts
+ * Speichert pro Slot (0, 1, 2) einen einzelnen Track + dessen Settings.
  */
 object TrackPrefs {
 
     private const val PREFS_NAME = "track_prefs"
-    private fun keyList(slot: Int)   = "track_list_$slot"
-    private fun keyActive(slot: Int) = "track_active_$slot"
+    private fun keyTrack(slot: Int) = "track_$slot"
+    private fun keyRepeat(slot: Int) = "repeat_$slot"
+    private fun keySleep(slot: Int) = "sleep_$slot"
+    private fun keyEq(slot: Int) = "eq_$slot"
+    private const val KEY_CURRENT_SLOT = "current_slot"
 
     // ── Speichern ────────────────────────────────────────────────────
 
-    fun saveList(context: Context, slot: Int, uris: List<Uri>) {
-        val arr = JSONArray().apply { uris.forEach { put(it.toString()) } }
-        prefs(context).edit().putString(keyList(slot), arr.toString()).apply()
+    fun saveTrack(context: Context, slot: Int, uri: Uri?) {
+        val value = uri?.toString() ?: ""
+        prefs(context).edit().putString(keyTrack(slot), value).apply()
     }
 
-    fun saveActive(context: Context, slot: Int, index: Int) {
-        prefs(context).edit().putInt(keyActive(slot), index).apply()
+    fun saveRepeatMode(context: Context, slot: Int, mode: Int) {
+        prefs(context).edit().putInt(keyRepeat(slot), mode).apply()
+    }
+
+    fun saveSleepTimer(context: Context, slot: Int, minutes: Int) {
+        prefs(context).edit().putInt(keySleep(slot), minutes).apply()
+    }
+
+    fun saveEqPreset(context: Context, slot: Int, preset: Int) {
+        prefs(context).edit().putInt(keyEq(slot), preset).apply()
+    }
+
+    fun saveCurrentSlot(context: Context, slot: Int) {
+        prefs(context).edit().putInt(KEY_CURRENT_SLOT, slot).apply()
     }
 
     // ── Laden ────────────────────────────────────────────────────────
 
-    fun loadList(context: Context, slot: Int): MutableList<Uri> {
-        val raw = prefs(context).getString(keyList(slot), null) ?: return mutableListOf()
-        val arr = try { JSONArray(raw) } catch (e: Exception) { return mutableListOf() }
-        val result = mutableListOf<Uri>()
-        for (i in 0 until arr.length()) {
-            val uri = Uri.parse(arr.getString(i))
-            // URI-Berechtigung prüfen
-            if (isReadable(context, uri)) result.add(uri)
-        }
-        // Liste bereinigt zurückspeichern falls URIs weggefallen sind
-        if (result.size < arr.length()) saveList(context, slot, result)
-        return result
+    fun loadTrack(context: Context, slot: Int): Uri? {
+        val raw = prefs(context).getString(keyTrack(slot), "") ?: ""
+        if (raw.isEmpty()) return null
+        val uri = Uri.parse(raw)
+        return if (isReadable(context, uri)) uri else null
     }
 
-    fun loadActive(context: Context, slot: Int): Int =
-        prefs(context).getInt(keyActive(slot), 0)
+    fun loadRepeatMode(context: Context, slot: Int): Int =
+        prefs(context).getInt(keyRepeat(slot), 0)  // 0 = No Repeat
 
-    /** Gibt die aktuell aktive URI zurück, oder null wenn Liste leer */
-    fun loadActiveUri(context: Context, slot: Int): Uri? {
-        val list = loadList(context, slot)
-        if (list.isEmpty()) return null
-        val idx = loadActive(context, slot).coerceIn(0, list.size - 1)
-        return list[idx]
-    }
+    fun loadSleepTimer(context: Context, slot: Int): Int =
+        prefs(context).getInt(keySleep(slot), 0)  // 0 = off
+
+    fun loadEqPreset(context: Context, slot: Int): Int =
+        prefs(context).getInt(keyEq(slot), 2)  // 2 = Relax (default)
+
+    fun loadCurrentSlot(context: Context): Int =
+        prefs(context).getInt(KEY_CURRENT_SLOT, 1)  // Default = Slot 1
 
     // ── Helpers ──────────────────────────────────────────────────────
 

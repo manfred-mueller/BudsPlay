@@ -13,94 +13,89 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="8dp">
 
-            <!-- ── Slot 1 ─────────────────────────────────────────── -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/track1_hint"
-                android:textSize="12sp"
-                android:textColor="#888888"
-                android:layout_marginBottom="4dp" />
-
+            <!-- ── Track 1 ─────────────────────────────────────────── -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="8dp">
 
-                <!-- Spinner Slot 1 -->
-                <Spinner
-                    android:id="@+id/spinnerSlot0"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp" />
-
-                <!-- Track hinzufügen -->
                 <Button
                     android:id="@+id/btnAddTrack0"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="+"
+                    android:text="…"
+                    android:textSize="22sp"
                     android:minWidth="0dp"
                     android:paddingHorizontal="14dp"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/tvTrack0"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Track 1: —"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btnRepeat0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="∞"
+                    android:textSize="20sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="12dp"
                     android:layout_marginEnd="4dp" />
 
-                <!-- Aktiven Track entfernen -->
                 <Button
                     android:id="@+id/btnRemoveTrack0"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/btn_remove"
+                    android:textSize="20sp"
                     android:minWidth="0dp"
                     android:paddingHorizontal="14dp"
-                    android:enabled="false"
-                    android:layout_marginEnd="4dp" />
-
-                <!-- Abspielen -->
-                <Button
-                    android:id="@+id/btnPlay0"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/btn_play_short"
-                    android:enabled="false"
-                    android:minWidth="0dp"
-                    android:paddingHorizontal="14dp" />
+                    android:enabled="false" />
             </LinearLayout>
 
-            <!-- ── Slot 2 ─────────────────────────────────────────── -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/track2_hint"
-                android:textSize="12sp"
-                android:textColor="#888888"
-                android:layout_marginBottom="4dp" />
-
+            <!-- ── Track 2 ─────────────────────────────────────────── -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="32dp">
-
-                <Spinner
-                    android:id="@+id/spinnerSlot1"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp" />
+                android:layout_marginBottom="8dp">
 
                 <Button
                     android:id="@+id/btnAddTrack1"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="+"
+                    android:text="…"
+                    android:textSize="22sp"
                     android:minWidth="0dp"
                     android:paddingHorizontal="14dp"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/tvTrack1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Track 2: —"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btnRepeat1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="∞"
+                    android:textSize="20sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="12dp"
                     android:layout_marginEnd="4dp" />
 
                 <Button
@@ -108,19 +103,57 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/btn_remove"
+                    android:textSize="20sp"
                     android:minWidth="0dp"
                     android:paddingHorizontal="14dp"
-                    android:enabled="false"
+                    android:enabled="false" />
+            </LinearLayout>
+
+            <!-- ── Track 3 ─────────────────────────────────────────── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="36dp">
+
+                <Button
+                    android:id="@+id/btnAddTrack2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="…"
+                    android:textSize="22sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="14dp"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/tvTrack2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Track 3: —"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btnRepeat2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="∞"
+                    android:textSize="20sp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="12dp"
                     android:layout_marginEnd="4dp" />
 
                 <Button
-                    android:id="@+id/btnPlay1"
+                    android:id="@+id/btnRemoveTrack2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/btn_play_short"
-                    android:enabled="false"
+                    android:text="@string/btn_remove"
+                    android:textSize="20sp"
                     android:minWidth="0dp"
-                    android:paddingHorizontal="14dp" />
+                    android:paddingHorizontal="14dp"
+                    android:enabled="false" />
             </LinearLayout>
 
             <!-- ── Now Playing ───────────────────────────────────── -->
@@ -129,7 +162,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text=""
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="#888888"
                 android:gravity="center" />
 
@@ -138,62 +171,79 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/now_playing_none"
-                android:textSize="20sp"
+                android:textSize="16sp"
                 android:gravity="center"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="8dp" />
 
             <Button
                 android:id="@+id/btnPlayPause"
-                android:layout_width="180dp"
+                android:layout_width="160dp"
                 android:layout_height="wrap_content"
                 android:text="@string/btn_play"
                 android:enabled="false"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginBottom="32dp" />
+                android:layout_marginBottom="12dp" />
 
             <ImageView
                 android:id="@+id/imgLogo"
-                android:layout_width="120dp"
-                android:layout_height="120dp"
+                android:layout_width="106dp"
+                android:layout_height="106dp"
                 android:src="@mipmap/ic_launcher"
                 android:contentDescription="@string/app_name"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginTop="40dp" />
+                android:layout_marginTop="36dp"
+                android:layout_marginBottom="36dp" />
 
             <!-- ── Lautstärke ─────────────────────────────────────── -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/volume_label"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="#888888"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="4dp" />
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="2dp" />
 
-            <SeekBar
-                android:id="@+id/volumeSlider"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:max="100"
-                android:progress="100"
-                android:progressTint="#60aaff"
-                android:thumbTint="#60aaff"
-                android:layout_marginBottom="16dp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <SeekBar
+                    android:id="@+id/volumeSlider"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="100"
+                    android:progress="100"
+                    android:progressTint="#60aaff"
+                    android:thumbTint="#60aaff" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchKeepAlive"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/keep_buds_on"
+                    android:textSize="11sp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
 
             <!-- ── Equalizer ──────────────────────────────────────── -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_eq_label"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="#888888"
-                android:layout_marginBottom="4dp" />
+                android:layout_marginBottom="2dp" />
 
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:scrollbars="none"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="8dp">
 
                 <LinearLayout
                     android:id="@+id/eqContainer"
@@ -213,9 +263,9 @@
         android:layout_alignParentBottom="true"
         android:orientation="vertical"
         android:background="#1a2a4a"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp">
+        android:paddingHorizontal="12dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
         <TextView
             android:id="@+id/tvStatusTitle"
@@ -223,10 +273,10 @@
             android:layout_height="wrap_content"
             android:text="@string/now_playing_none"
             android:textColor="#ffffff"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:singleLine="true"
             android:ellipsize="end"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="2dp" />
 
         <SeekBar
             android:id="@+id/seekBar"

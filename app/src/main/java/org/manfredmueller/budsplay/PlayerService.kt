@@ -8,12 +8,18 @@ import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Binder
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import kotlin.math.PI
+import kotlin.math.sin
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -26,6 +32,16 @@ class PlayerService : Service() {
         const val CHANNEL_ID = "playback_channel"
         const val NOTIFICATION_ID = 1
         const val DEFAULT_EQ_PRESET = 2  // Index von "Entspannung" in eqPresets
+
+        // Keep-Buds-on: hochfrequenter Ton hält Bluetooth-Buds wach
+        const val KEEP_ALIVE_FREQ_HZ = 16196.0
+        const val KEEP_ALIVE_DURATION_S = 5
+        const val KEEP_ALIVE_INTERVAL_MS = 60_000L
+        const val KEEP_ALIVE_SAMPLE_RATE = 44100
+        // So niedrig wie möglich, so hoch wie nötig: Bei den meisten BT-Buds hält
+        // schon der aktive Stream die Verbindung – Amplitude nur erhöhen, falls
+        // die Buds trotzdem abschalten (Schwelle ist gerätespezifisch).
+        const val KEEP_ALIVE_AMPLITUDE = 0.02
     }
 
     inner class LocalBinder : Binder() {
@@ -49,6 +65,74 @@ class PlayerService : Service() {
     // Nach transientem Fokusverlust nur fortsetzen, wenn vorher gespielt wurde
     private var resumeOnFocusGain = false
 
+    // ── Keep-Buds-on ─────────────────────────────────────────────────
+    private val keepAliveHandler = Handler(Looper.getMainLooper())
+    private var keepAliveTrack: AudioTrack? = null
+    private val keepAliveSamples: ShortArray by lazy { buildKeepAliveTone() }
+
+    var keepBudsOn: Boolean = false
+        set(value) {
+            field = value
+            keepAliveHandler.removeCallbacksAndMessages(null)
+            if (value) keepAliveHandler.post(keepAliveRunnable) else stopKeepAliveTone()
+        }
+
+    private val keepAliveRunnable = object : Runnable {
+        override fun run() {
+            if (!keepBudsOn) return
+            // Nur senden, wenn gerade keine andere Audioquelle aktiv ist
+            if (!audioManager.isMusicActive) playKeepAliveTone()
+            keepAliveHandler.postDelayed(this, KEEP_ALIVE_INTERVAL_MS)
+        }
+    }
+
+    /** Erzeugt den 16,2-kHz-Sinuston mit Fade-In/Out (verhindert Knackser) */
+    private fun buildKeepAliveTone(): ShortArray {
+        val numSamples = KEEP_ALIVE_SAMPLE_RATE * KEEP_ALIVE_DURATION_S
+        val fadeSamples = KEEP_ALIVE_SAMPLE_RATE / 20  // 50 ms
+        val amplitude = Short.MAX_VALUE * KEEP_ALIVE_AMPLITUDE
+        return ShortArray(numSamples) { i ->
+            val fade = when {
+                i < fadeSamples -> i.toDouble() / fadeSamples
+                i > numSamples - fadeSamples -> (numSamples - i).toDouble() / fadeSamples
+                else -> 1.0
+            }
+            (amplitude * fade * sin(2.0 * PI * KEEP_ALIVE_FREQ_HZ * i / KEEP_ALIVE_SAMPLE_RATE))
+                .toInt().toShort()
+        }
+    }
+
+    private fun playKeepAliveTone() {
+        stopKeepAliveTone()
+        keepAliveTrack = AudioTrack(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build(),
+            AudioFormat.Builder()
+                .setSampleRate(KEEP_ALIVE_SAMPLE_RATE)
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .build(),
+            keepAliveSamples.size * 2,
+            AudioTrack.MODE_STATIC,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
+        ).apply {
+            write(keepAliveSamples, 0, keepAliveSamples.size)
+            play()
+        }
+        // Track nach Abspielende freigeben (Runnable bleibt unberührt)
+        keepAliveHandler.postDelayed({ stopKeepAliveTone() }, (KEEP_ALIVE_DURATION_S + 1) * 1000L)
+    }
+
+    private fun stopKeepAliveTone() {
+        keepAliveTrack?.let {
+            try { it.stop() } catch (e: Exception) { /* bereits gestoppt */ }
+            it.release()
+        }
+        keepAliveTrack = null
+    }
+
     // Vordefinierte Presets: Name → Gain-Werte in mB pro Band (5 Bänder: 60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz)
     val eqPresets: List<Pair<Int, ShortArray>> = listOf(
         R.string.eq_bass_boost  to shortArrayOf(600, 400, 0, 0, 0),
@@ -61,8 +145,6 @@ class PlayerService : Service() {
         set(value) {
             val changed = field != value
             field = value
-            // Aktiver Slot bekam eine neue URI → vorbereiteten Player invalidieren,
-            // damit beim nächsten Play der neue Track geladen wird
             if (changed && currentSlot == 0) currentSlot = -1
         }
     var track1: Uri? = null
@@ -71,8 +153,17 @@ class PlayerService : Service() {
             field = value
             if (changed && currentSlot == 1) currentSlot = -1
         }
-    var currentSlot: Int = -1
+    var track2: Uri? = null
+        set(value) {
+            val changed = field != value
+            field = value
+            if (changed && currentSlot == 2) currentSlot = -1
+        }
+    var currentSlot: Int = 1
         private set
+
+    private var isAutoRepeating = false  // Flag: verhindert Race Condition bei Repeat
+    private var announcementPlayer: MediaPlayer? = null  // Für Sprachansagen
 
     var onSlotChanged: ((slot: Int, title: String) -> Unit)? = null
     var onPlaybackChanged: ((playing: Boolean) -> Unit)? = null
@@ -93,23 +184,71 @@ class PlayerService : Service() {
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onDestroy() {
+        keepAliveHandler.removeCallbacksAndMessages(null)
+        stopKeepAliveTone()
         abandonAudioFocus()
         equalizer?.release()
         mediaPlayer?.release()
+        announcementPlayer?.release()
         mediaSession.release()
         super.onDestroy()
+    }
+
+    /** Spielt Ansage ab und startet Track danach */
+    private fun playAnnouncementThenPlay(announcementResId: Int) {
+        announcementPlayer?.release()
+        announcementPlayer = MediaPlayer.create(this, announcementResId)
+        announcementPlayer?.setVolume(0.25f, 0.25f)  // 25% Lautstärke (~-12dB)
+        announcementPlayer?.setOnCompletionListener {
+            it.release()
+            announcementPlayer = null
+            // Nach Ansage: Track starten
+            stopKeepAliveTone()
+            requestAudioFocus()
+            mediaPlayer?.setVolume(volume, volume)
+            mediaPlayer?.start()
+            updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
+            startForeground(NOTIFICATION_ID, buildNotification())
+            onPlaybackChanged?.invoke(true)
+        }
+        announcementPlayer?.start()
+    }
+
+    /** Spielt Ansage-MP3 ab (nur Ansage, kein Auto-Play) */
+    private fun playAnnouncement(resourceId: Int) {
+        announcementPlayer?.release()
+        announcementPlayer = MediaPlayer.create(this, resourceId)
+        announcementPlayer?.setVolume(0.25f, 0.25f)  // 25% Lautstärke (~-12dB)
+        announcementPlayer?.setOnCompletionListener {
+            it.release()
+            announcementPlayer = null
+        }
+        announcementPlayer?.start()
     }
 
     private fun setupMediaSession() {
         mediaSession = MediaSessionCompat(this, "BudsPlay").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
-                    requestAudioFocus()
-                    mediaPlayer?.start()
-                    setActive(true)
-                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
-                    startForeground(NOTIFICATION_ID, buildNotification())
-                    onPlaybackChanged?.invoke(true)
+                    // Single Tap → Play/Pause des aktuellen Slots
+                    if (mediaPlayer?.isPlaying == true) {
+                        mediaPlayer?.pause()
+                        updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
+                        onPlaybackChanged?.invoke(false)
+                    } else if (currentSlot in 0..2) {
+                        // Wenn nichts vorbereitet → aktuellen Slot spielen (mit prepareAsync)
+                        if (mediaPlayer == null) {
+                            playSlot(currentSlot)
+                        } else {
+                            // Track ist bereits vorbereitet → Ansage + direkt starten
+                            val announcementResId = when (currentSlot) {
+                                0 -> R.raw.track1
+                                1 -> R.raw.track2
+                                else -> R.raw.track3
+                            }
+                            playAnnouncementThenPlay(announcementResId)
+                        }
+                    }
                 }
                 override fun onPause() {
                     mediaPlayer?.pause()
@@ -123,13 +262,23 @@ class PlayerService : Service() {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     onPlaybackChanged?.invoke(false)
                 }
-                // Doppeltippen rechts → Track 1
-                override fun onSkipToNext() {
-                    track0?.let { playSlot(0) }
-                }
-                // Dreifachtippen rechts → Track 2
+                // Double Tap → vorheriger Slot (zyklisch: 0→2→1→0)
                 override fun onSkipToPrevious() {
-                    track1?.let { playSlot(1) }
+                    val nextSlot = when (currentSlot) {
+                        0 -> 2
+                        1 -> 0
+                        else -> 1
+                    }
+                    playSlot(nextSlot)
+                }
+                // Triple Tap → nächster Slot (zyklisch: 0→1→2→0)
+                override fun onSkipToNext() {
+                    val nextSlot = when (currentSlot) {
+                        0 -> 1
+                        1 -> 2
+                        else -> 0
+                    }
+                    playSlot(nextSlot)
                 }
             })
         }
@@ -198,10 +347,16 @@ class PlayerService : Service() {
     private fun abandonAudioFocus() { audioManager.abandonAudioFocusRequest(focusRequest) }
 
     fun playSlot(slot: Int) {
-        val uri = (if (slot == 0) track0 else track1) ?: return
+        // Benutzer hat einen anderen Track gewählt → Repeat-Autoplay unterbrechen
+        if (slot != currentSlot) {
+            isAutoRepeating = false
+        }
+
+        val uri = (if (slot == 0) track0 else if (slot == 1) track1 else track2) ?: return
 
         // Track bereits vorbereitet → direkt starten
         if (currentSlot == slot && mediaPlayer != null) {
+            stopKeepAliveTone()
             requestAudioFocus()
             mediaPlayer?.setVolume(volume, volume)
             mediaPlayer?.start()
@@ -227,6 +382,7 @@ class PlayerService : Service() {
             )
             setDataSource(applicationContext, uri)
             setOnPreparedListener {
+                stopKeepAliveTone()
                 requestAudioFocus()
                 setVolume(volume, volume)
                 start()
@@ -237,12 +393,29 @@ class PlayerService : Service() {
                 updateMetadata(title)
                 updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
                 startForeground(NOTIFICATION_ID, buildNotification())
+
+                // Sprachansage: "Track 1", "Track 2" oder "Track 3"
+                val announcementResId = when (slot) {
+                    0 -> R.raw.track1
+                    1 -> R.raw.track2
+                    else -> R.raw.track3
+                }
+                playAnnouncement(announcementResId)
+
                 onSlotChanged?.invoke(slot, title)
                 onPlaybackChanged?.invoke(true)
             }
             setOnCompletionListener {
-                updatePlaybackState(PlaybackStateCompat.STATE_STOPPED)
-                onPlaybackChanged?.invoke(false)
+                // Repeat-Einstellung prüfen
+                val repeatMode = TrackPrefs.loadRepeatMode(applicationContext, slot)
+                if (repeatMode == 1 && currentSlot == slot && !isAutoRepeating) {
+                    // Repeat aktiv & Slot nicht gewechselt → Track erneut abspielen
+                    isAutoRepeating = true
+                    playSlot(slot)
+                } else {
+                    updatePlaybackState(PlaybackStateCompat.STATE_STOPPED)
+                    onPlaybackChanged?.invoke(false)
+                }
             }
             setOnErrorListener { _, _, _ ->
                 // Defekte/nicht lesbare Datei: Player zurücksetzen statt hängen bleiben
@@ -261,7 +434,7 @@ class PlayerService : Service() {
      * Wird beim App-Start aufgerufen damit Play sofort verfügbar ist.
      */
     fun prepareSlot(slot: Int) {
-        val uri = (if (slot == 0) track0 else track1) ?: return
+        val uri = (if (slot == 0) track0 else if (slot == 1) track1 else track2) ?: return
         currentSlot = slot
 
         mediaPlayer?.reset() ?: run { mediaPlayer = MediaPlayer() }
@@ -288,8 +461,16 @@ class PlayerService : Service() {
                 onPlaybackChanged?.invoke(false)
             }
             setOnCompletionListener {
-                updatePlaybackState(PlaybackStateCompat.STATE_STOPPED)
-                onPlaybackChanged?.invoke(false)
+                // Repeat-Einstellung prüfen
+                val repeatMode = TrackPrefs.loadRepeatMode(applicationContext, slot)
+                if (repeatMode == 1 && currentSlot == slot && !isAutoRepeating) {
+                    // Repeat aktiv & Slot nicht gewechselt → Track erneut vorbereiten
+                    isAutoRepeating = true
+                    prepareSlot(slot)
+                } else {
+                    updatePlaybackState(PlaybackStateCompat.STATE_STOPPED)
+                    onPlaybackChanged?.invoke(false)
+                }
             }
             setOnErrorListener { _, _, _ ->
                 // Defekte/nicht lesbare Datei: Player zurücksetzen statt hängen bleiben
@@ -304,8 +485,19 @@ class PlayerService : Service() {
     }
 
     fun togglePlayPause() {
-        val controls = mediaSession.controller.transportControls
-        if (mediaPlayer?.isPlaying == true) controls.pause() else controls.play()
+        if (mediaPlayer?.isPlaying == true) {
+            mediaPlayer?.pause()
+            updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
+            onPlaybackChanged?.invoke(false)
+        } else if (currentSlot in 0..2) {
+            // Ansage abspielen, dann Track starten
+            val announcementResId = when (currentSlot) {
+                0 -> R.raw.track1
+                1 -> R.raw.track2
+                else -> R.raw.track3
+            }
+            playAnnouncementThenPlay(announcementResId)
+        }
     }
 
     fun isPlaying(): Boolean = mediaPlayer?.isPlaying == true
@@ -363,10 +555,12 @@ class PlayerService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val title = if (currentSlot >= 0) {
-            val uri = if (currentSlot == 0) track0 else track1
-            uri?.let { titleFromUri(it) } ?: getString(R.string.app_name)
-        } else getString(R.string.app_name)
+        val title = when {
+            currentSlot == 0 && track0 != null -> titleFromUri(track0!!)
+            currentSlot == 1 && track1 != null -> titleFromUri(track1!!)
+            currentSlot == 2 && track2 != null -> titleFromUri(track2!!)
+            else -> getString(R.string.app_name)
+        }
 
         val actIntent = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
@@ -374,7 +568,7 @@ class PlayerService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(if (currentSlot >= 0) getString(R.string.track_index, currentSlot + 1) else "")
+            .setContentText(if (currentSlot >= 0 && currentSlot < 3) getString(R.string.track_index, currentSlot + 1) else "")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(actIntent)
             .addAction(android.R.drawable.ic_media_previous,

@@ -26,21 +26,21 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import org.manfredmueller.budsplay.databinding.ActivityMainBinding
+import kotlin.system.exitProcess
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var playerService: PlayerService? = null
     private var bound = false
+    private var currentSlot = 1  // Default Slot 1
     private var pendingPickSlot = 0
 
-    private val trackLists  = arrayOf(mutableListOf<Uri>(), mutableListOf<Uri>())
-    private val activeIndex = intArrayOf(0, 0)
-    // Spinner-Adapter pro Slot
-    private val adapters = arrayOfNulls<ArrayAdapter<String>>(2)
-    private val trackNames = arrayOf(mutableListOf<String>(), mutableListOf<String>())
+    private val tracks = arrayOfNulls<Uri>(3)  // Ein Track pro Slot
 
     private val eqCheckBoxes = mutableListOf<android.widget.CheckBox>()
+    private var announcementPlayer: android.media.MediaPlayer? = null
+    private var announcementQueue = mutableListOf<Int>()
 
     private var backPressedOnce = false
     private val backHandler = Handler(Looper.getMainLooper())
@@ -67,31 +67,39 @@ class MainActivity : AppCompatActivity() {
             playerService?.eqPresetIndex = savedPreset
             setupEqCheckboxes(savedPreset)
 
-            // Gespeicherte Lautstärke laden und anwenden
+            // Gespeicherte Lautstärke laden
             val savedVolume = getSharedPreferences("settings", Context.MODE_PRIVATE)
                 .getInt("volume", 100).coerceIn(0, 100)
             playerService?.setVolume(savedVolume / 100f)
             binding.volumeSlider.progress = savedVolume
 
-            for (slot in 0..1) {
-                trackLists[slot] = TrackPrefs.loadList(this@MainActivity, slot)
-                activeIndex[slot] = TrackPrefs.loadActive(this@MainActivity, slot)
-                    .coerceIn(0, maxOf(0, trackLists[slot].size - 1))
-                rebuildNames(slot)
-                syncAdapter(slot)
-                syncServiceSlot(slot)
-            }
-            updateButtonStates()
-            // Ersten verfügbaren Track automatisch vorauswählen
-            for (slot in 0..1) {
-                if (trackLists[slot].isNotEmpty()) {
-                    playerService?.prepareSlot(slot)
-                    break  // Slot 0 wenn vorhanden, sonst Slot 1
+            // Keep-Buds-on laden
+            val keepOn = getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getBoolean("keep_buds_on", false)
+            binding.switchKeepAlive.isChecked = keepOn
+            playerService?.keepBudsOn = keepOn
+
+            // 3 Tracks laden
+            for (slot in 0..2) {
+                tracks[slot] = TrackPrefs.loadTrack(this@MainActivity, slot)
+                when (slot) {
+                    0 -> playerService?.track0 = tracks[slot]
+                    1 -> playerService?.track1 = tracks[slot]
+                    else -> playerService?.track2 = tracks[slot]
                 }
+            }
+            currentSlot = TrackPrefs.loadCurrentSlot(this@MainActivity)
+            updateUI()
+            updateButtonStates()
+
+            // Aktuellen Slot vorbereiten
+            if (currentSlot in 0..2 && tracks[currentSlot] != null) {
+                playerService?.prepareSlot(currentSlot)
             }
 
             playerService?.onSlotChanged = { slot, title ->
                 runOnUiThread {
+                    currentSlot = slot
                     binding.tvNowPlaying.text = title
                     binding.tvSlot.text = getString(R.string.track_index, slot + 1)
                     binding.btnPlayPause.isEnabled = true
@@ -129,17 +137,15 @@ class MainActivity : AppCompatActivity() {
         uri ?: return@registerForActivityResult
         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         val slot = pendingPickSlot
-        trackLists[slot].add(uri)
-        TrackPrefs.saveList(this, slot, trackLists[slot])
-        activeIndex[slot] = trackLists[slot].size - 1
-        TrackPrefs.saveActive(this, slot, activeIndex[slot])
-        rebuildNames(slot)
-        syncAdapter(slot)
-        // Spinner auf neuen Eintrag setzen (kein weiteres onItemSelected auslösen)
-        spinnerForSlot(slot).setSelection(activeIndex[slot], false)
-        syncServiceSlot(slot)
+        tracks[slot] = uri
+        TrackPrefs.saveTrack(this, slot, uri)
+        when (slot) {
+            0 -> playerService?.track0 = uri
+            1 -> playerService?.track1 = uri
+            else -> playerService?.track2 = uri
+        }
+        updateUI()
         updateButtonStates()
-        // Neuen Track sofort vorbereiten, damit Buds-Steuerung ohne Anspielen funktioniert
         if (playerService?.isPlaying() != true) playerService?.prepareSlot(slot)
     }
 
@@ -151,28 +157,70 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        setupSpinners()
         setupButtons()
+        setupTrackClickListeners()
         setupBackHandling()
         val intent = Intent(this, PlayerService::class.java)
         startService(intent)
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
-    override fun onResume() { super.onResume(); if (playerService?.isPlaying() == true) startUpdating() }
-    override fun onPause()  { super.onPause(); stopUpdating() }
+    override fun onResume() {
+        super.onResume()
+        if (playerService?.isPlaying() == true) startUpdating()
+    }
+    override fun onPause()  {
+        super.onPause()
+        stopUpdating()
+        // Aktuellen Slot speichern
+        if (currentSlot in 0..2) {
+            TrackPrefs.saveCurrentSlot(this, currentSlot)
+        }
+    }
 
     override fun onDestroy() {
         stopPulse()
         backHandler.removeCallbacksAndMessages(null)
+        announcementPlayer?.release()
         if (bound) { unbindService(serviceConnection); bound = false }
         super.onDestroy()
+    }
+
+    private fun playAnnouncement(resourceId: Int) {
+        announcementPlayer?.release()
+        announcementPlayer = android.media.MediaPlayer.create(this, resourceId)
+        announcementPlayer?.setVolume(0.25f, 0.25f)  // 25% Lautstärke (~-12dB)
+        announcementPlayer?.setOnCompletionListener {
+            it.release()
+            announcementPlayer = null
+        }
+        announcementPlayer?.start()
+    }
+
+    private fun playSequentialAnnouncements(resourceIds: List<Int>) {
+        announcementQueue.clear()
+        announcementQueue.addAll(resourceIds)
+        playNextAnnouncement()
+    }
+
+    private fun playNextAnnouncement() {
+        if (announcementQueue.isEmpty()) return
+        val resourceId = announcementQueue.removeAt(0)
+        announcementPlayer?.release()
+        announcementPlayer = android.media.MediaPlayer.create(this, resourceId)
+        announcementPlayer?.setVolume(0.25f, 0.25f)
+        announcementPlayer?.setOnCompletionListener {
+            it.release()
+            announcementPlayer = null
+            playNextAnnouncement()  // Nächste Ansage abspielen
+        }
+        announcementPlayer?.start()
     }
 
     private fun setupBackHandling() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (playerService?.isPlaying() == true && !backPressedOnce) {
+                if (!backPressedOnce) {
                     backPressedOnce = true
                     Toast.makeText(this@MainActivity, getString(R.string.back_press_hint), Toast.LENGTH_SHORT).show()
                     backHandler.postDelayed({ backPressedOnce = false }, 2000)
@@ -183,12 +231,11 @@ class MainActivity : AppCompatActivity() {
                         stopService(Intent(this@MainActivity, PlayerService::class.java))
                     }
                     if (bound) { unbindService(serviceConnection); bound = false }
-                    finish()
+                    finishAndRemoveTask()  // Entfernt auch aus Recent Apps
                 }
             }
         })
     }
-
     // -------------------------------------------------------------------------
     // Menu
     // -------------------------------------------------------------------------
@@ -282,39 +329,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Spinner Setup
-    // -------------------------------------------------------------------------
-
-    private fun setupSpinners() {
-        for (slot in 0..1) {
-            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, trackNames[slot]).apply {
-                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            }
-            adapters[slot] = adapter
-            spinnerForSlot(slot).apply {
-                this.adapter = adapter
-                onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                    override fun onItemSelected(parent: AdapterView<*>, view: android.view.View?, pos: Int, id: Long) {
-                        activeIndex[slot] = pos
-                        TrackPrefs.saveActive(this@MainActivity, slot, pos)
-                        syncServiceSlot(slot)
-                        // Auswahl sofort vorbereiten, damit Buds-Steuerung direkt greift
-                        if (playerService?.isPlaying() != true) playerService?.prepareSlot(slot)
-                    }
-                    override fun onNothingSelected(parent: AdapterView<*>) {}
-                }
-            }
-        }
-    }
 
     private fun setupButtons() {
+        // Slot 0
         binding.btnAddTrack0.setOnClickListener { pendingPickSlot = 0; checkPermissionAndPick() }
+        binding.btnRemoveTrack0.setOnClickListener { removeTrack(0) }
+
+        // Slot 1
         binding.btnAddTrack1.setOnClickListener { pendingPickSlot = 1; checkPermissionAndPick() }
-        binding.btnRemoveTrack0.setOnClickListener { removeActive(0) }
-        binding.btnRemoveTrack1.setOnClickListener { removeActive(1) }
-        binding.btnPlay0.setOnClickListener { playerService?.playSlot(0) }
-        binding.btnPlay1.setOnClickListener { playerService?.playSlot(1) }
+        binding.btnRemoveTrack1.setOnClickListener { removeTrack(1) }
+
+        // Slot 2
+        binding.btnAddTrack2.setOnClickListener { pendingPickSlot = 2; checkPermissionAndPick() }
+        binding.btnRemoveTrack2.setOnClickListener { removeTrack(2) }
+
+        // Play/Pause (global)
         binding.btnPlayPause.setOnClickListener { playerService?.togglePlayPause() }
         binding.btnPlayPause.isEnabled = false
 
@@ -323,6 +352,13 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(s: SeekBar) { stopUpdating() }
             override fun onStopTrackingTouch(s: SeekBar) { if (playerService?.isPlaying() == true) startUpdating() }
         })
+
+        // Keep-Buds-on: anwenden und speichern
+        binding.switchKeepAlive.setOnCheckedChangeListener { _, checked ->
+            playerService?.keepBudsOn = checked
+            getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .edit().putBoolean("keep_buds_on", checked).apply()
+        }
 
         // Lautstärke-Slider: live anwenden, beim Loslassen speichern
         binding.volumeSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -341,48 +377,87 @@ class MainActivity : AppCompatActivity() {
     // Helpers
     // -------------------------------------------------------------------------
 
-    private fun removeActive(slot: Int) {
-        val list = trackLists[slot]
-        if (list.isEmpty()) return
-        val idx = activeIndex[slot].coerceIn(0, list.size - 1)
-        list.removeAt(idx)
-        TrackPrefs.saveList(this, slot, list)
-        activeIndex[slot] = if (list.isEmpty()) 0 else idx.coerceIn(0, list.size - 1)
-        TrackPrefs.saveActive(this, slot, activeIndex[slot])
-        rebuildNames(slot)
-        syncAdapter(slot)
-        if (list.isNotEmpty()) spinnerForSlot(slot).setSelection(activeIndex[slot], false)
-        syncServiceSlot(slot)
+    private fun setupTrackClickListeners() {
+        // Tap auf Track-Name → aktivieren + abspielen
+        binding.tvTrack0.setOnClickListener { playTrack(0) }
+        binding.tvTrack1.setOnClickListener { playTrack(1) }
+        binding.tvTrack2.setOnClickListener { playTrack(2) }
+
+        // Repeat-Buttons
+        binding.btnRepeat0.setOnClickListener { cycleRepeatMode(0) }
+        binding.btnRepeat1.setOnClickListener { cycleRepeatMode(1) }
+        binding.btnRepeat2.setOnClickListener { cycleRepeatMode(2) }
+    }
+
+    private fun cycleRepeatMode(slot: Int) {
+        val current = TrackPrefs.loadRepeatMode(this, slot)
+        val next = (current + 1) % 2  // 0↔1
+        TrackPrefs.saveRepeatMode(this, slot, next)
+        updateRepeatButtonUI(slot)
+        showRepeatModeToast(next)
+    }
+
+    private fun updateRepeatButtonUI(slot: Int) {
+        val mode = TrackPrefs.loadRepeatMode(this, slot)
+        val btn = when (slot) {
+            0 -> binding.btnRepeat0
+            1 -> binding.btnRepeat1
+            else -> binding.btnRepeat2
+        }
+        btn.alpha = if (mode == 0) 0.5f else 1.0f
+    }
+
+    private fun showRepeatModeToast(mode: Int) {
+        val text = if (mode == 0) getString(R.string.repeat_off) else getString(R.string.repeat_on)
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+
+        // Sprachansage: "Track X" + "Repeat ein/aus"
+        val trackResId = when (currentSlot) {
+            0 -> R.raw.track1
+            1 -> R.raw.track2
+            else -> R.raw.track3
+        }
+        val repeatResId = if (mode == 0) R.raw.repeat_aus else R.raw.repeat_ein
+        playSequentialAnnouncements(listOf(trackResId, repeatResId))
+    }
+
+    private fun playTrack(slot: Int) {
+        if (tracks[slot] == null) return
+        playerService?.playSlot(slot)
+    }
+
+    private fun removeTrack(slot: Int) {
+        tracks[slot] = null
+        TrackPrefs.saveTrack(this, slot, null)
+        when (slot) {
+            0 -> playerService?.track0 = null
+            1 -> playerService?.track1 = null
+            else -> playerService?.track2 = null
+        }
+        updateUI()
         updateButtonStates()
     }
 
-    private fun rebuildNames(slot: Int) {
-        trackNames[slot].clear()
-        trackLists[slot].forEach { trackNames[slot].add(displayName(it)) }
-    }
+    private fun updateUI() {
+        val track0Name = tracks[0]?.let { displayName(it) } ?: "—"
+        val track1Name = tracks[1]?.let { displayName(it) } ?: "—"
+        val track2Name = tracks[2]?.let { displayName(it) } ?: "—"
 
-    private fun syncAdapter(slot: Int) {
-        adapters[slot]?.notifyDataSetChanged()
-    }
+        binding.tvTrack0.text = "Track 1: $track0Name"
+        binding.tvTrack1.text = "Track 2: $track1Name"
+        binding.tvTrack2.text = "Track 3: $track2Name"
 
-    private fun syncServiceSlot(slot: Int) {
-        val list = trackLists[slot]
-        val uri = if (list.isEmpty()) null
-                  else list[activeIndex[slot].coerceIn(0, list.size - 1)]
-        if (slot == 0) playerService?.track0 = uri else playerService?.track1 = uri
+        // Repeat-Button UIs aktualisieren
+        updateRepeatButtonUI(0)
+        updateRepeatButtonUI(1)
+        updateRepeatButtonUI(2)
     }
 
     private fun updateButtonStates() {
-        val has0 = trackLists[0].isNotEmpty()
-        val has1 = trackLists[1].isNotEmpty()
-        binding.btnPlay0.isEnabled = has0
-        binding.btnPlay1.isEnabled = has1
-        binding.btnRemoveTrack0.isEnabled = has0
-        binding.btnRemoveTrack1.isEnabled = has1
+        binding.btnRemoveTrack0.isEnabled = tracks[0] != null
+        binding.btnRemoveTrack1.isEnabled = tracks[1] != null
+        binding.btnRemoveTrack2.isEnabled = tracks[2] != null
     }
-
-    private fun spinnerForSlot(slot: Int) =
-        if (slot == 0) binding.spinnerSlot0 else binding.spinnerSlot1
 
     private fun checkPermissionAndPick() {
         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
