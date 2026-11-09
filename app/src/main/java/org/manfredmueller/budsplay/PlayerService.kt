@@ -104,6 +104,40 @@ class PlayerService : Service() {
         }
     }
 
+    // ── Einstellungen pro Track ──────────────────────────────────────
+    private val slotPrefs by lazy { getSharedPreferences("slot_settings", MODE_PRIVATE) }
+
+    fun getSlotInt(slot: Int, key: String, def: Int): Int = slotPrefs.getInt("s${slot}_$key", def)
+    fun getSlotBool(slot: Int, key: String, def: Boolean): Boolean = slotPrefs.getBoolean("s${slot}_$key", def)
+
+    private fun saveSlot(key: String, value: Any) {
+        if (currentSlot !in 0..2) return
+        val e = slotPrefs.edit()
+        when (value) {
+            is Int -> e.putInt("s${currentSlot}_$key", value)
+            is Boolean -> e.putBoolean("s${currentSlot}_$key", value)
+        }
+        e.apply()
+    }
+
+    /** Wendet die gespeicherten Einstellungen des Tracks an; beim Start der Wiedergabe */
+    private fun applySlotSettings(slot: Int) {
+        if (slot !in 0..2) return
+        val savedVol = getSlotInt(slot, "volume", -1)
+        if (savedVol >= 0) {
+            val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (savedVol / 100f * max).roundToInt(), 0)
+        }
+        heartbeatGenerator.bpm = getSlotInt(slot, "hb_bpm", 40)
+        heartbeatGenerator.volume = getSlotInt(slot, "hb_vol", 30) / 100f
+        heartbeatGenerator.isEnabled = getSlotBool(slot, "hb_on", false)
+    }
+
+    /** Nutzeraktionen: ändern und für den aktuellen Track speichern */
+    fun userSetHeartbeatEnabled(on: Boolean) { setHeartbeatEnabled(on); saveSlot("hb_on", on) }
+    fun userSetHeartbeatBpm(bpm: Int) { heartbeatGenerator.bpm = bpm; saveSlot("hb_bpm", bpm) }
+    fun userSetHeartbeatVolume(pct: Int) { heartbeatGenerator.volume = pct / 100f; saveSlot("hb_vol", pct) }
+
     /** Hinweis, wenn Wiedergabe ohne Bluetooth-Kopfhörer angefragt wird */
     private fun bluetoothOutputOrHint(): Boolean {
         if (isBluetoothOutputActive()) return true
@@ -261,6 +295,7 @@ class PlayerService : Service() {
     /** Spielt Ansage ab und startet Track danach */
     private fun playAnnouncementThenPlay(announcementResId: Int) {
         if (!isBluetoothOutputActive()) return
+        applySlotSettings(currentSlot)
         announcementPlayer?.release()
         announcementPlayer = MediaPlayer.create(this, announcementResId)
         announcementPlayer?.setVolume(0.25f, 0.25f)  // 25% Lautstärke (~-12dB)
@@ -416,6 +451,7 @@ class PlayerService : Service() {
 
     fun playSlot(slot: Int) {
         if (!bluetoothOutputOrHint()) return
+        applySlotSettings(slot)
         // Benutzer hat einen anderen Track gewählt → Repeat-Autoplay unterbrechen
         if (slot != currentSlot) {
             isAutoRepeating = false
@@ -587,6 +623,7 @@ class PlayerService : Service() {
         audioManager.setStreamVolume(
             AudioManager.STREAM_MUSIC, (v.coerceIn(0f, 1f) * max).roundToInt(), 0
         )
+        saveSlot("volume", (v.coerceIn(0f, 1f) * 100).roundToInt())
     }
 
     fun setEqPreset(index: Int) {

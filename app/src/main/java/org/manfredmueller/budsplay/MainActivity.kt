@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private var bound = false
     private var currentSlot = 1  // Default Slot 1
     private var pendingPickSlot = 0
+    private var uiSyncing = false
 
     private val tracks = arrayOfNulls<Uri>(3)  // Ein Track pro Slot
 
@@ -76,18 +77,6 @@ class MainActivity : AppCompatActivity() {
             binding.switchKeepAlive.isChecked = keepOn
             playerService?.keepBudsOn = keepOn
 
-            // Herzschlag laden
-            val hbPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
-            val hbVol = hbPrefs.getInt("heartbeat_vol", 30).coerceIn(0, 100)
-            val hbOn = hbPrefs.getBoolean("heartbeat_on", false)
-            binding.sliderHeartbeat.progress = hbVol
-            playerService?.heartbeatGenerator?.volume = hbVol / 100f
-            val hbBpm = hbPrefs.getInt("heartbeat_bpm", 40).coerceIn(30, 60)
-            playerService?.heartbeatGenerator?.bpm = hbBpm
-            binding.sliderHeartbeatBpm.progress = hbBpm - 30
-            binding.tvHeartbeatBpm.text = getString(R.string.heartbeat_bpm_value, hbBpm)
-            binding.switchHeartbeat.isChecked = hbOn
-            playerService?.setHeartbeatEnabled(hbOn)
 
             // 3 Tracks laden
             for (slot in 0..2) {
@@ -110,6 +99,7 @@ class MainActivity : AppCompatActivity() {
             playerService?.onSlotChanged = { slot, title ->
                 runOnUiThread {
                     currentSlot = slot
+                    syncSlotUi(slot)
                     binding.tvNowPlaying.text = title
                     binding.tvSlot.text = getString(R.string.track_index, slot + 1)
                     binding.btnPlayPause.isEnabled = true
@@ -384,37 +374,42 @@ class MainActivity : AppCompatActivity() {
 
         // Herzschlag: Schalter und Lautstärke
         binding.switchHeartbeat.setOnCheckedChangeListener { _, checked ->
-            playerService?.setHeartbeatEnabled(checked)
-            getSharedPreferences("settings", Context.MODE_PRIVATE)
-                .edit().putBoolean("heartbeat_on", checked).apply()
+            if (!uiSyncing) playerService?.userSetHeartbeatEnabled(checked)
         }
         binding.sliderHeartbeat.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
-                if (fromUser) playerService?.heartbeatGenerator?.volume = p / 100f
+                if (fromUser) playerService?.userSetHeartbeatVolume(p)
             }
             override fun onStartTrackingTouch(s: SeekBar) {}
-            override fun onStopTrackingTouch(s: SeekBar) {
-                getSharedPreferences("settings", Context.MODE_PRIVATE)
-                    .edit().putInt("heartbeat_vol", s.progress).apply()
-            }
+            override fun onStopTrackingTouch(s: SeekBar) {}
         })
         binding.sliderHeartbeatBpm.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
                 val bpm = p + 30
                 binding.tvHeartbeatBpm.text = getString(R.string.heartbeat_bpm_value, bpm)
-                if (fromUser) playerService?.heartbeatGenerator?.bpm = bpm
+                if (fromUser) playerService?.userSetHeartbeatBpm(bpm)
             }
             override fun onStartTrackingTouch(s: SeekBar) {}
-            override fun onStopTrackingTouch(s: SeekBar) {
-                getSharedPreferences("settings", Context.MODE_PRIVATE)
-                    .edit().putInt("heartbeat_bpm", s.progress + 30).apply()
-            }
+            override fun onStopTrackingTouch(s: SeekBar) {}
         })
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /** Zeigt die gespeicherten Werte des Tracks an, ohne sie erneut zu speichern */
+    private fun syncSlotUi(slot: Int) {
+        val svc = playerService ?: return
+        uiSyncing = true
+        binding.switchHeartbeat.isChecked = svc.getSlotBool(slot, "hb_on", false)
+        binding.sliderHeartbeat.progress = svc.getSlotInt(slot, "hb_vol", 30)
+        val bpm = svc.getSlotInt(slot, "hb_bpm", 40)
+        binding.sliderHeartbeatBpm.progress = bpm - 30
+        binding.tvHeartbeatBpm.text = getString(R.string.heartbeat_bpm_value, bpm)
+        binding.volumeSlider.progress = svc.getSlotInt(slot, "volume", (svc.volume * 100).toInt())
+        uiSyncing = false
+    }
 
     private fun setupTrackClickListeners() {
         // Tap auf Track-Name → aktivieren + abspielen
