@@ -50,4 +50,9 @@
     <!-- Repeat mode -->
     <string name="repeat_on">Repeat on</string>
     <string name="repeat_off">Repeat off</string>
+    <string name="no_output_hint">No Bluetooth headphones connected, playback blocked</string>
+    <string name="notification_no_output">No Bluetooth headphones connected</string>
+    <string name="heartbeat_label">Heartbeat</string>
+    <string name="heartbeat_on">On</string>
+    <string name="heartbeat_bpm_value">%d BPM</string>
 </resources>

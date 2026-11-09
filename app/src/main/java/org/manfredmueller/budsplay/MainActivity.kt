@@ -68,16 +68,26 @@ class MainActivity : AppCompatActivity() {
             setupEqCheckboxes(savedPreset)
 
             // Gespeicherte Lautstärke laden
-            val savedVolume = getSharedPreferences("settings", Context.MODE_PRIVATE)
-                .getInt("volume", 100).coerceIn(0, 100)
-            playerService?.setVolume(savedVolume / 100f)
-            binding.volumeSlider.progress = savedVolume
+            binding.volumeSlider.progress = ((playerService?.volume ?: 0f) * 100).toInt()
 
             // Keep-Buds-on laden
             val keepOn = getSharedPreferences("settings", Context.MODE_PRIVATE)
                 .getBoolean("keep_buds_on", false)
             binding.switchKeepAlive.isChecked = keepOn
             playerService?.keepBudsOn = keepOn
+
+            // Herzschlag laden
+            val hbPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+            val hbVol = hbPrefs.getInt("heartbeat_vol", 30).coerceIn(0, 100)
+            val hbOn = hbPrefs.getBoolean("heartbeat_on", false)
+            binding.sliderHeartbeat.progress = hbVol
+            playerService?.heartbeatGenerator?.volume = hbVol / 100f
+            val hbBpm = hbPrefs.getInt("heartbeat_bpm", 40).coerceIn(30, 60)
+            playerService?.heartbeatGenerator?.bpm = hbBpm
+            binding.sliderHeartbeatBpm.progress = hbBpm - 30
+            binding.tvHeartbeatBpm.text = getString(R.string.heartbeat_bpm_value, hbBpm)
+            binding.switchHeartbeat.isChecked = hbOn
+            playerService?.setHeartbeatEnabled(hbOn)
 
             // 3 Tracks laden
             for (slot in 0..2) {
@@ -369,6 +379,35 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(s: SeekBar) {
                 getSharedPreferences("settings", Context.MODE_PRIVATE)
                     .edit().putInt("volume", s.progress).apply()
+            }
+        })
+
+        // Herzschlag: Schalter und Lautstärke
+        binding.switchHeartbeat.setOnCheckedChangeListener { _, checked ->
+            playerService?.setHeartbeatEnabled(checked)
+            getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .edit().putBoolean("heartbeat_on", checked).apply()
+        }
+        binding.sliderHeartbeat.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
+                if (fromUser) playerService?.heartbeatGenerator?.volume = p / 100f
+            }
+            override fun onStartTrackingTouch(s: SeekBar) {}
+            override fun onStopTrackingTouch(s: SeekBar) {
+                getSharedPreferences("settings", Context.MODE_PRIVATE)
+                    .edit().putInt("heartbeat_vol", s.progress).apply()
+            }
+        })
+        binding.sliderHeartbeatBpm.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
+                val bpm = p + 30
+                binding.tvHeartbeatBpm.text = getString(R.string.heartbeat_bpm_value, bpm)
+                if (fromUser) playerService?.heartbeatGenerator?.bpm = bpm
+            }
+            override fun onStartTrackingTouch(s: SeekBar) {}
+            override fun onStopTrackingTouch(s: SeekBar) {
+                getSharedPreferences("settings", Context.MODE_PRIVATE)
+                    .edit().putInt("heartbeat_bpm", s.progress + 30).apply()
             }
         })
     }

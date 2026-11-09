@@ -115,7 +115,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="36dp">
+                android:layout_marginBottom="8dp">
 
                 <Button
                     android:id="@+id/btnAddTrack2"
@@ -186,13 +186,14 @@
 
             <ImageView
                 android:id="@+id/imgLogo"
-                android:layout_width="106dp"
-                android:layout_height="106dp"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:src="@mipmap/ic_launcher"
-                android:contentDescription="@string/app_name"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="36dp"
-                android:layout_marginBottom="36dp" />
+                android:scaleType="fitCenter"
+                android:adjustViewBounds="true"
+                android:padding="16dp"
+                android:contentDescription="@string/app_name" />
 
             <!-- ── Lautstärke ─────────────────────────────────────── -->
             <TextView
@@ -230,6 +231,63 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <!-- ── Herzschlag ─────────────────────────────────────── -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/heartbeat_label"
+                android:textSize="11sp"
+                android:textColor="#888888"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="2dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="8dp">
+
+                <SeekBar
+                    android:id="@+id/sliderHeartbeat"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="100"
+                    android:progress="30"
+                    android:progressTint="#60aaff"
+                    android:thumbTint="#60aaff" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchHeartbeat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/heartbeat_on"
+                    android:textSize="11sp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <!-- ── Herzschlag-Frequenz ───────────────────────────── -->
+            <TextView
+                android:id="@+id/tvHeartbeatBpm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="40 BPM"
+                android:textSize="11sp"
+                android:textColor="#888888"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="2dp" />
+
+            <SeekBar
+                android:id="@+id/sliderHeartbeatBpm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="30"
+                android:progress="10"
+                android:progressTint="#60aaff"
+                android:thumbTint="#60aaff"
+                android:layout_marginBottom="8dp" />
+
             <!-- ── Equalizer ──────────────────────────────────────── -->
             <TextView
                 android:layout_width="match_parent"
@@ -237,6 +295,7 @@
                 android:text="@string/settings_eq_label"
                 android:textSize="11sp"
                 android:textColor="#888888"
+                android:layout_marginTop="8dp"
                 android:layout_marginBottom="2dp" />
 
             <HorizontalScrollView

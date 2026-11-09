@@ -47,4 +47,9 @@
     <!-- Repeat mode -->
     <string name="repeat_on">Wiederholung an</string>
     <string name="repeat_off">Wiederholung aus</string>
+    <string name="no_output_hint">Keine Bluetooth-Kopfhörer verbunden, Wiedergabe gesperrt</string>
+    <string name="notification_no_output">Keine Bluetooth-Kopfhörer verbunden</string>
+    <string name="heartbeat_label">Herzschlag</string>
+    <string name="heartbeat_on">An</string>
+    <string name="heartbeat_bpm_value">%d BPM</string>
 </resources>

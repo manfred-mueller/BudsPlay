@@ -5,8 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -18,12 +22,15 @@ import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.widget.Toast
 import kotlin.math.PI
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.media.session.MediaButtonReceiver
 
 class PlayerService : Service() {
@@ -54,16 +61,66 @@ class PlayerService : Service() {
     private lateinit var focusRequest: AudioFocusRequest
     private var mediaPlayer: MediaPlayer? = null
     private var equalizer: Equalizer? = null
+    val heartbeatGenerator = HeartbeatGenerator()
 
     // Aktuell gewählter Preset-Index (Standard = Entspannung)
     var eqPresetIndex: Int = DEFAULT_EQ_PRESET
 
-    // App-interne Lautstärke (0.0–1.0)
-    var volume: Float = 1f
-        private set
+    // Lautstärke = Systemlautstärke Musik (0.0–1.0), keine eigene App-Lautstärke mehr
+    val volume: Float
+        get() = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() /
+                audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
     // Nach transientem Fokusverlust nur fortsetzen, wenn vorher gespielt wurde
     private var resumeOnFocusGain = false
+
+    // ── Nur-Bluetooth-Ausgabe ────────────────────────────────────────
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) pauseForOutputLoss()
+        }
+    }
+
+    /** True, wenn ein Bluetooth-Gerät als Audioausgabe aktiv ist */
+    fun isBluetoothOutputActive(): Boolean =
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        }
+
+    /** Herzschlag ein-/ausschalten und sofort synchronisieren */
+    fun setHeartbeatEnabled(on: Boolean) {
+        heartbeatGenerator.isEnabled = on
+        syncHeartbeat()
+    }
+
+    /** Herzschlag läuft nur bei aktiver Wiedergabe und Bluetooth-Ausgabe */
+    private fun syncHeartbeat() {
+        val shouldRun = heartbeatGenerator.isEnabled && isPlaying() && isBluetoothOutputActive()
+        if (shouldRun) {
+            if (!heartbeatGenerator.isPlaying) heartbeatGenerator.start()
+        } else if (heartbeatGenerator.isPlaying) {
+            heartbeatGenerator.stop()
+        }
+    }
+
+    /** Hinweis, wenn Wiedergabe ohne Bluetooth-Kopfhörer angefragt wird */
+    private fun bluetoothOutputOrHint(): Boolean {
+        if (isBluetoothOutputActive()) return true
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification(noOutput = true))
+        Toast.makeText(this, R.string.no_output_hint, Toast.LENGTH_SHORT).show()
+        return false
+    }
+
+    /** Ausgabe ist weggefallen (Buds raus, BT getrennt): laufende Wiedergabe pausieren */
+    private fun pauseForOutputLoss() {
+        if (mediaPlayer?.isPlaying == true) {
+            mediaPlayer?.pause()
+            updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
+            onPlaybackChanged?.invoke(false)
+        }
+    }
 
     // ── Keep-Buds-on ─────────────────────────────────────────────────
     private val keepAliveHandler = Handler(Looper.getMainLooper())
@@ -81,7 +138,7 @@ class PlayerService : Service() {
         override fun run() {
             if (!keepBudsOn) return
             // Nur senden, wenn gerade keine andere Audioquelle aktiv ist
-            if (!audioManager.isMusicActive) playKeepAliveTone()
+            if (!audioManager.isMusicActive && isBluetoothOutputActive()) playKeepAliveTone()
             keepAliveHandler.postDelayed(this, KEEP_ALIVE_INTERVAL_MS)
         }
     }
@@ -174,6 +231,11 @@ class PlayerService : Service() {
         createNotificationChannel()
         setupMediaSession()
         setupAudioFocus()
+        ContextCompat.registerReceiver(
+            this, noisyReceiver,
+            IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -184,8 +246,10 @@ class PlayerService : Service() {
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onDestroy() {
+        try { unregisterReceiver(noisyReceiver) } catch (e: IllegalArgumentException) { /* nicht registriert */ }
         keepAliveHandler.removeCallbacksAndMessages(null)
         stopKeepAliveTone()
+        heartbeatGenerator.release()
         abandonAudioFocus()
         equalizer?.release()
         mediaPlayer?.release()
@@ -196,6 +260,7 @@ class PlayerService : Service() {
 
     /** Spielt Ansage ab und startet Track danach */
     private fun playAnnouncementThenPlay(announcementResId: Int) {
+        if (!isBluetoothOutputActive()) return
         announcementPlayer?.release()
         announcementPlayer = MediaPlayer.create(this, announcementResId)
         announcementPlayer?.setVolume(0.25f, 0.25f)  // 25% Lautstärke (~-12dB)
@@ -205,7 +270,7 @@ class PlayerService : Service() {
             // Nach Ansage: Track starten
             stopKeepAliveTone()
             requestAudioFocus()
-            mediaPlayer?.setVolume(volume, volume)
+            mediaPlayer?.setVolume(1f, 1f)
             mediaPlayer?.start()
             updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
             startForeground(NOTIFICATION_ID, buildNotification())
@@ -216,6 +281,7 @@ class PlayerService : Service() {
 
     /** Spielt Ansage-MP3 ab (nur Ansage, kein Auto-Play) */
     private fun playAnnouncement(resourceId: Int) {
+        if (!isBluetoothOutputActive()) return
         announcementPlayer?.release()
         announcementPlayer = MediaPlayer.create(this, resourceId)
         announcementPlayer?.setVolume(0.25f, 0.25f)  // 25% Lautstärke (~-12dB)
@@ -230,6 +296,7 @@ class PlayerService : Service() {
         mediaSession = MediaSessionCompat(this, "BudsPlay").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
+                    if (mediaPlayer?.isPlaying != true && !bluetoothOutputOrHint()) return
                     // Single Tap → Play/Pause des aktuellen Slots
                     if (mediaPlayer?.isPlaying == true) {
                         mediaPlayer?.pause()
@@ -300,6 +367,7 @@ class PlayerService : Service() {
             .setState(state, position, 1.0f)
             .build()
         mediaSession.setPlaybackState(ps)
+        syncHeartbeat()
     }
 
     private fun updateMetadata(title: String) {
@@ -347,6 +415,7 @@ class PlayerService : Service() {
     private fun abandonAudioFocus() { audioManager.abandonAudioFocusRequest(focusRequest) }
 
     fun playSlot(slot: Int) {
+        if (!bluetoothOutputOrHint()) return
         // Benutzer hat einen anderen Track gewählt → Repeat-Autoplay unterbrechen
         if (slot != currentSlot) {
             isAutoRepeating = false
@@ -358,7 +427,7 @@ class PlayerService : Service() {
         if (currentSlot == slot && mediaPlayer != null) {
             stopKeepAliveTone()
             requestAudioFocus()
-            mediaPlayer?.setVolume(volume, volume)
+            mediaPlayer?.setVolume(1f, 1f)
             mediaPlayer?.start()
             applyEqualizer(mediaPlayer!!.audioSessionId)
             val title = titleFromUri(uri)
@@ -384,7 +453,7 @@ class PlayerService : Service() {
             setOnPreparedListener {
                 stopKeepAliveTone()
                 requestAudioFocus()
-                setVolume(volume, volume)
+                setVolume(1f, 1f)
                 start()
                 // Equalizer an neue AudioSession hängen
                 applyEqualizer(audioSessionId)
@@ -450,7 +519,7 @@ class PlayerService : Service() {
             setOnPreparedListener {
                 // Kein start() — aber Audio Focus anfordern!
                 requestAudioFocus()
-                setVolume(volume, volume)
+                setVolume(1f, 1f)
                 applyEqualizer(audioSessionId)
                 val title = titleFromUri(uri)
                 updateMetadata(title)
@@ -485,6 +554,7 @@ class PlayerService : Service() {
     }
 
     fun togglePlayPause() {
+        if (mediaPlayer?.isPlaying != true && !bluetoothOutputOrHint()) return
         if (mediaPlayer?.isPlaying == true) {
             mediaPlayer?.pause()
             updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
@@ -511,10 +581,12 @@ class PlayerService : Service() {
         stopSelf()
     }
 
-    /** Setzt die app-interne Lautstärke (0.0–1.0) und wendet sie sofort an */
+    /** Setzt die Systemlautstärke Musik (0.0–1.0) */
     fun setVolume(v: Float) {
-        volume = v.coerceIn(0f, 1f)
-        mediaPlayer?.setVolume(volume, volume)
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        audioManager.setStreamVolume(
+            AudioManager.STREAM_MUSIC, (v.coerceIn(0f, 1f) * max).roundToInt(), 0
+        )
     }
 
     fun setEqPreset(index: Int) {
@@ -554,7 +626,7 @@ class PlayerService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(noOutput: Boolean = false): Notification {
         val title = when {
             currentSlot == 0 && track0 != null -> titleFromUri(track0!!)
             currentSlot == 1 && track1 != null -> titleFromUri(track1!!)
@@ -568,7 +640,7 @@ class PlayerService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(if (currentSlot >= 0 && currentSlot < 3) getString(R.string.track_index, currentSlot + 1) else "")
+            .setContentText(if (noOutput) getString(R.string.notification_no_output) else if (currentSlot >= 0 && currentSlot < 3) getString(R.string.track_index, currentSlot + 1) else "")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(actIntent)
             .addAction(android.R.drawable.ic_media_previous,
