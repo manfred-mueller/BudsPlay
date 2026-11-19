@@ -1,6 +1,8 @@
 package org.manfredmueller.budsplay
 
+import android.Manifest
 import android.app.Notification
+import android.content.pm.PackageManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -22,6 +24,7 @@ import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import kotlin.math.PI
 import kotlin.math.roundToInt
@@ -31,11 +34,13 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.media.session.MediaButtonReceiver
 
 class PlayerService : Service() {
 
     companion object {
+        const val TAG = "BudsPlay"
         const val CHANNEL_ID = "playback_channel"
         const val NOTIFICATION_ID = 1
         const val DEFAULT_EQ_PRESET = 2  // Index von "Entspannung" in eqPresets
@@ -112,12 +117,12 @@ class PlayerService : Service() {
 
     private fun saveSlot(key: String, value: Any) {
         if (currentSlot !in 0..2) return
-        val e = slotPrefs.edit()
-        when (value) {
-            is Int -> e.putInt("s${currentSlot}_$key", value)
-            is Boolean -> e.putBoolean("s${currentSlot}_$key", value)
+        slotPrefs.edit {
+            when (value) {
+                is Int -> putInt("s${currentSlot}_$key", value)
+                is Boolean -> putBoolean("s${currentSlot}_$key", value)
+            }
         }
-        e.apply()
     }
 
     /** Wendet die gespeicherten Einstellungen des Tracks an; beim Start der Wiedergabe */
@@ -141,8 +146,12 @@ class PlayerService : Service() {
     /** Hinweis, wenn Wiedergabe ohne Bluetooth-Kopfhörer angefragt wird */
     private fun bluetoothOutputOrHint(): Boolean {
         if (isBluetoothOutputActive()) return true
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(noOutput = true))
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            getSystemService(NotificationManager::class.java)
+                .notify(NOTIFICATION_ID, buildNotification(noOutput = true))
+        }
         Toast.makeText(this, R.string.no_output_hint, Toast.LENGTH_SHORT).show()
         return false
     }
@@ -218,7 +227,7 @@ class PlayerService : Service() {
 
     private fun stopKeepAliveTone() {
         keepAliveTrack?.let {
-            try { it.stop() } catch (e: Exception) { /* bereits gestoppt */ }
+            try { it.stop() } catch (e: Exception) { Log.w(TAG, "AudioTrack bereits gestoppt", e) }
             it.release()
         }
         keepAliveTrack = null
@@ -280,7 +289,7 @@ class PlayerService : Service() {
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onDestroy() {
-        try { unregisterReceiver(noisyReceiver) } catch (e: IllegalArgumentException) { /* nicht registriert */ }
+        try { unregisterReceiver(noisyReceiver) } catch (e: IllegalArgumentException) { Log.w(TAG, "Receiver nicht registriert", e) }
         keepAliveHandler.removeCallbacksAndMessages(null)
         stopKeepAliveTone()
         heartbeatGenerator.release()
@@ -650,7 +659,7 @@ class PlayerService : Service() {
             .removeSuffix(".ogg").removeSuffix(".OGG")
             .removeSuffix(".aac").removeSuffix(".AAC")
             .removeSuffix(".m4a").removeSuffix(".M4A")
-    } catch (e: Exception) { "?" }
+    } catch (e: Exception) { Log.w(TAG, "Titel nicht lesbar", e); "?" }
 
     private fun createNotificationChannel() {
         val ch = NotificationChannel(
@@ -677,7 +686,7 @@ class PlayerService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(if (noOutput) getString(R.string.notification_no_output) else if (currentSlot >= 0 && currentSlot < 3) getString(R.string.track_index, currentSlot + 1) else "")
+            .setContentText(if (noOutput) getString(R.string.notification_no_output) else if (currentSlot in 0..2) getString(R.string.track_index, currentSlot + 1) else "")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(actIntent)
             .addAction(android.R.drawable.ic_media_previous,
