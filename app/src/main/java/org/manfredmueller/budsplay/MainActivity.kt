@@ -358,6 +358,7 @@ class MainActivity : AppCompatActivity() {
             playerService?.keepBudsOn = checked
             getSharedPreferences("settings", Context.MODE_PRIVATE)
                 .edit().putBoolean("keep_buds_on", checked).apply()
+            if (checked && !uiSyncing) requestIgnoreBatteryOptimizations()
         }
 
         // Lautstärke-Slider: live anwenden, beim Loslassen speichern
@@ -397,6 +398,20 @@ class MainActivity : AppCompatActivity() {
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /** Fragt nach, ob BudsPlay von der Akkuoptimierung ausgenommen wird */
+    private fun requestIgnoreBatteryOptimizations() {
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        try {
+            startActivity(Intent(
+                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                android.net.Uri.parse("package:$packageName")
+            ))
+        } catch (e: android.content.ActivityNotFoundException) {
+            startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
+    }
 
     /** Zeigt die gespeicherten Werte des Tracks an, ohne sie erneut zu speichern */
     private fun syncSlotUi(slot: Int) {
